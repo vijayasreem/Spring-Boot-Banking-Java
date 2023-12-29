@@ -43,16 +43,27 @@ public class TransactionRestController {
     public ResponseEntity<?> makeTransfer(
             @Valid @RequestBody TransactionInput transactionInput) {
         if (InputValidator.isSearchTransactionValid(transactionInput)) {
-            boolean isComplete = transactionService.makeTransfer(transactionInput);
-            if (isComplete) {
-                Account account = accountService.getAccount(transactionInput.getSortCode(), transactionInput.getAccountNumber());
-                double withdrawalAmount = transactionInput.getAmount();
-                LocalDateTime transactionDateTime = LocalDateTime.now();
-                double updatedBalance = account.getCurrentBalance() - withdrawalAmount;
-                String confirmationMessage = "Withdrawal of " + withdrawalAmount + " completed successfully. Transaction date and time: " + transactionDateTime + ". Updated account balance: " + updatedBalance;
-                return new ResponseEntity<>(confirmationMessage, HttpStatus.OK);
+            Account account = accountService.getAccount(transactionInput.getSortCode(), transactionInput.getAccountNumber());
+            if (account != null) {
+                LocalDateTime currentTime = LocalDateTime.now();
+                LocalDateTime lastDepositTime = transactionService.getLastDepositTime(account);
+                if (lastDepositTime != null && currentTime.minusMinutes(5).isBefore(lastDepositTime)) {
+                    String notificationMessage = "A recent deposit has been made to this account. Do you want to proceed with the new deposit?";
+                    return new ResponseEntity<>(notificationMessage, HttpStatus.OK);
+                } else {
+                    boolean isComplete = transactionService.makeTransfer(transactionInput);
+                    if (isComplete) {
+                        double withdrawalAmount = transactionInput.getAmount();
+                        LocalDateTime transactionDateTime = LocalDateTime.now();
+                        double updatedBalance = account.getCurrentBalance() - withdrawalAmount;
+                        String confirmationMessage = "Withdrawal of " + withdrawalAmount + " completed successfully. Transaction date and time: " + transactionDateTime + ". Updated account balance: " + updatedBalance;
+                        return new ResponseEntity<>(confirmationMessage, HttpStatus.OK);
+                    } else {
+                        return new ResponseEntity<>(ERROR_MESSAGE, HttpStatus.INTERNAL_SERVER_ERROR);
+                    }
+                }
             } else {
-                return new ResponseEntity<>(ERROR_MESSAGE, HttpStatus.INTERNAL_SERVER_ERROR);
+                return new ResponseEntity<>(NO_ACCOUNT_FOUND, HttpStatus.OK);
             }
         } else {
             return new ResponseEntity<>(INVALID_TRANSACTION, HttpStatus.BAD_REQUEST);
