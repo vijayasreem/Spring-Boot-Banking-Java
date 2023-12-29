@@ -16,6 +16,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -42,9 +43,17 @@ public class TransactionRestController {
     public ResponseEntity<?> makeTransfer(
             @Valid @RequestBody TransactionInput transactionInput) {
         if (InputValidator.isSearchTransactionValid(transactionInput)) {
-//            new Thread(() -> transactionService.makeTransfer(transactionInput));
             boolean isComplete = transactionService.makeTransfer(transactionInput);
-            return new ResponseEntity<>(isComplete, HttpStatus.OK);
+            if (isComplete) {
+                Account account = accountService.getAccount(transactionInput.getSortCode(), transactionInput.getAccountNumber());
+                double withdrawalAmount = transactionInput.getAmount();
+                LocalDateTime transactionDateTime = LocalDateTime.now();
+                double updatedBalance = account.getCurrentBalance() - withdrawalAmount;
+                String confirmationMessage = "Withdrawal of " + withdrawalAmount + " completed successfully. Transaction date and time: " + transactionDateTime + ". Updated account balance: " + updatedBalance;
+                return new ResponseEntity<>(confirmationMessage, HttpStatus.OK);
+            } else {
+                return new ResponseEntity<>(ERROR_MESSAGE, HttpStatus.INTERNAL_SERVER_ERROR);
+            }
         } else {
             return new ResponseEntity<>(INVALID_TRANSACTION, HttpStatus.BAD_REQUEST);
         }
